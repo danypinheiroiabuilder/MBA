@@ -1,0 +1,168 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+
+import { useAuthStore } from "@/stores/auth";
+import { Button } from "@/components/ui/Button";
+
+const nav = [
+  { href: "/", label: "Dashboard" },
+  { href: "/transacoes", label: "Receitas & Despesas" },
+  { href: "/categorias", label: "Categorias" },
+];
+
+function isActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname.startsWith(href);
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { ready, user, signOut } = useAuthStore();
+
+  const isLogin = pathname === "/login";
+
+  if (!ready) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+        <div className="h-[60vh] w-full animate-pulse rounded-3xl border border-border bg-surface/55" />
+      </div>
+    );
+  }
+
+  if (!user && !isLogin) {
+    router.replace("/login");
+    return null;
+  }
+
+  if (user && isLogin) {
+    router.replace("/");
+    return null;
+  }
+
+  return (
+    <div className="min-h-dvh w-full">
+      {isLogin ? (
+        <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+          {children}
+        </div>
+      ) : (
+        <>
+          <div className="mx-auto flex w-full max-w-6xl gap-4 px-4 pt-6 pb-24 sm:px-6 sm:py-6">
+            <aside className="hidden w-64 shrink-0 sm:block">
+              <div className="sticky top-6 space-y-4">
+                <div className="rounded-3xl border border-border bg-surface/70 p-4 backdrop-blur">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium text-muted">Fluxo</div>
+                    <div className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_6px_rgba(110,123,255,0.12)]" />
+                  </div>
+                  <div className="mt-1 text-lg font-semibold tracking-tight text-text">
+                    Caixa mensal
+                  </div>
+                  <div className="mt-3 text-xs text-muted">
+                    {user?.email ?? "—"}
+                  </div>
+                </div>
+
+                <nav className="rounded-3xl border border-border bg-surface/60 p-2 backdrop-blur">
+                  {nav.map((item) => {
+                    const active = isActive(pathname, item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={[
+                          "relative block rounded-2xl px-3 py-2 text-sm transition-colors",
+                          active ? "text-text" : "text-muted hover:text-text",
+                        ].join(" ")}
+                      >
+                        {active && (
+                          <motion.div
+                            layoutId="nav-pill"
+                            className="absolute inset-0 rounded-2xl bg-card shadow-[0_10px_30px_-18px_rgba(0,0,0,0.65)]"
+                            transition={{
+                              type: "spring",
+                              stiffness: 420,
+                              damping: 40,
+                            }}
+                          />
+                        )}
+                        <span className="relative">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+
+                <div className="rounded-3xl border border-border bg-surface/60 p-2 backdrop-blur">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-center"
+                    onClick={() => void signOut().then(() => router.replace("/login"))}
+                  >
+                    Sair
+                  </Button>
+                </div>
+              </div>
+            </aside>
+
+            <div className="min-w-0 flex-1">
+              <header className="mb-4 flex items-center justify-between sm:hidden">
+                <div className="text-base font-semibold tracking-tight text-text">
+                  Fluxo de Caixa
+                </div>
+              </header>
+
+              <AnimatePresence mode="wait">
+                <motion.main
+                  key={pathname}
+                  initial={{ opacity: 0, y: 10, filter: "blur(6px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, y: -8, filter: "blur(6px)" }}
+                  transition={{ duration: 0.22, ease: "easeOut" }}
+                  className="rounded-3xl border border-border bg-surface/55 p-4 backdrop-blur sm:p-6"
+                >
+                  {children}
+                </motion.main>
+              </AnimatePresence>
+            </div>
+          </div>
+
+          <div className="fixed bottom-4 left-0 right-0 z-40 sm:hidden">
+            <nav className="mx-auto flex w-[min(520px,calc(100%-32px))] items-center justify-between gap-1 rounded-3xl border border-border bg-surface/70 p-1 backdrop-blur">
+              {nav.map((item) => {
+                const active = isActive(pathname, item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={[
+                      "relative flex flex-1 items-center justify-center rounded-2xl px-3 py-2 text-xs font-medium transition-colors",
+                      active ? "text-text" : "text-muted hover:text-text",
+                    ].join(" ")}
+                  >
+                    {active && (
+                      <motion.div
+                        layoutId="nav-pill-mobile"
+                        className="absolute inset-0 rounded-2xl bg-card"
+                        transition={{
+                          type: "spring",
+                          stiffness: 420,
+                          damping: 40,
+                        }}
+                      />
+                    )}
+                    <span className="relative">{item.label.split(" ")[0]}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
