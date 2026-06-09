@@ -1,4 +1,12 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Fluxo de Caixa (MBA)
+
+Sistema web moderno de controle financeiro pessoal com:
+
+- Cadastro de **categorias** (tipo, cor)
+- Cadastro de **receitas/despesas** (descrição, categoria, valor, data, tag)
+- **Dashboard** mensal com cards (Receitas, Despesas, Saldo) e gráficos **linha/coluna** (sem pizza/rosca)
+- **Supabase Auth + RLS** (dados por usuário)
+- Deploy na **Vercel**
 
 ## Getting Started
 
@@ -16,7 +24,20 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment variables
+
+Crie `.env.local` com:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+### Supabase schema
+
+Execute o script SQL (tabelas + RLS + view):
+
+- `supabase/schema.sql`
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
