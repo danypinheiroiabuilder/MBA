@@ -17,6 +17,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -27,6 +28,7 @@ export default function LoginPage() {
   function go(next: "signin" | "signup" | "forgot") {
     setMessage(null);
     setMode(next);
+    setShowPassword(false);
     if (next === "forgot") setPassword("");
   }
 
@@ -59,7 +61,11 @@ export default function LoginPage() {
 
       setMessage("Enviamos um link para redefinir sua senha. Verifique seu e-mail.");
     } catch (e: unknown) {
-      setMessage(e instanceof Error ? e.message : "Erro ao enviar e-mail de recuperação.");
+      let errorMsg = e instanceof Error ? e.message : "Erro ao enviar e-mail de recuperação.";
+      if (errorMsg.toLowerCase().includes("fetch")) {
+        errorMsg = "Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente.";
+      }
+      setMessage(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -95,7 +101,11 @@ export default function LoginPage() {
 
       router.replace("/");
     } catch (e: unknown) {
-      setMessage(e instanceof Error ? e.message : "Erro ao autenticar.");
+      let errorMsg = e instanceof Error ? e.message : "Erro ao autenticar.";
+      if (errorMsg.toLowerCase().includes("fetch")) {
+        errorMsg = "Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente.";
+      }
+      setMessage(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -110,21 +120,12 @@ export default function LoginPage() {
         className="w-full"
       >
         <Card className="p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-sm font-medium text-muted">Fluxo de Caixa</div>
-              <div className="mt-1 text-2xl font-semibold tracking-tight text-text">
-                {mode === "signin"
-                  ? "Entrar"
-                  : mode === "signup"
-                    ? "Criar conta"
-                    : "Recuperar senha"}
-              </div>
-              <div className="mt-2 text-sm text-muted">
-                {mode === "forgot"
-                  ? "Informe seu e-mail para receber o link de redefinição."
-                  : "Acesse seu dashboard financeiro."}
-              </div>
+          <div>
+            <div className="text-sm font-medium text-muted">Fluxo de Caixa</div>
+            <div className="mt-2 text-sm text-muted">
+              {mode === "forgot"
+                ? "Informe seu e-mail para receber o link de redefinição."
+                : "Acesse seu dashboard financeiro."}
             </div>
           </div>
 
@@ -150,29 +151,41 @@ export default function LoginPage() {
             {mode !== "forgot" ? (
               <div className="space-y-1">
                 <div className="text-xs font-medium text-muted">Senha</div>
-                <Input
-                  type="password"
-                  placeholder="mínimo 6 caracteres"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                  disabled={!configOk}
-                />
-                {mode === "signin" && (
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="text-xs text-muted">Problemas para entrar?</div>
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-primary hover:brightness-110"
-                      onClick={() => go("forgot")}
-                      disabled={!configOk}
-                    >
-                      Esqueci minha senha
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="mínimo 6 caracteres"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    disabled={!configOk}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted hover:text-text disabled:opacity-50"
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={!configOk}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? "◐" : "●"}
+                  </button>
+                </div>
+                  {mode === "signin" && (
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="text-xs text-muted">Problemas para entrar?</div>
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-primary hover:brightness-110"
+                        onClick={() => go("forgot")}
+                        disabled={!configOk}
+                      >
+                        Esqueci minha senha
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
               <div className="rounded-2xl border border-border bg-card/20 px-3 py-2 text-xs text-muted">
                 Você receberá um link para definir uma nova senha.
               </div>
