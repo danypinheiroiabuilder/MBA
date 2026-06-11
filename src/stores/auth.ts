@@ -34,14 +34,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { data, error } = await supabase.auth.getSession();
       if (error) throw error;
-      set({ session: data.session ?? null, user: data.session?.user ?? null, ready: true, error: null });
+      set({ session: data.session ?? null, user: data.session?.user ?? null, ready: true, error: null, configOk: true });
 
       supabase.auth.onAuthStateChange((_event, session) => {
         set({ session: session ?? null, user: session?.user ?? null, ready: true });
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to initialize auth";
-      set({ ready: true, error: message });
+      console.error("[Auth] Init error:", message, e);
+      set({ ready: true, error: message, configOk: true });
     }
   },
 
