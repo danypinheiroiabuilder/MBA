@@ -10,6 +10,7 @@ type AuthState = {
   session: Session | null;
   user: User | null;
   configOk: boolean;
+  error: string | null;
   init: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -19,29 +20,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
   configOk: true,
+  error: null,
 
   init: async () => {
     if (get().ready) return;
 
     const supabase = getSupabase();
     if (!supabase) {
-      set({ ready: true, session: null, user: null, configOk: false });
+      set({ ready: true, session: null, user: null, configOk: false, error: "Supabase not configured" });
       return;
     }
 
-    const { data } = await supabase.auth.getSession();
-    set({ session: data.session ?? null, user: data.session?.user ?? null, ready: true });
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      set({ session: data.session ?? null, user: data.session?.user ?? null, ready: true, error: null });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      set({ session: session ?? null, user: session?.user ?? null, ready: true });
-    });
+      supabase.auth.onAuthStateChange((_event, session) => {
+        set({ session: session ?? null, user: session?.user ?? null, ready: true });
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to initialize auth";
+      set({ ready: true, error: message });
+    }
   },
 
   signOut: async () => {
     const supabase = getSupabase();
     if (!supabase) return;
     await supabase.auth.signOut();
-    set({ session: null, user: null });
+    set({ session: null, user: null, error: null });
   },
 }));
 

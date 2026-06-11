@@ -28,7 +28,7 @@ function mapTransaction(row: TransactionRow): Transaction {
   };
 }
 
-export async function listTransactionsByMonth(monthKey: string) {
+export async function listTransactionsByMonth(monthKey: string): Promise<Transaction[]> {
   const supabase = requireSupabase();
   const from = `${monthKey}-01`;
   const to = `${monthKey}-31`;
@@ -48,7 +48,7 @@ export async function upsertTransaction(
   input: TransactionInput,
   userId: string,
   editingId?: string,
-) {
+): Promise<Transaction> {
   const supabase = requireSupabase();
   const tag = input.tag?.trim() ? input.tag.trim().replace(/^#/, "") : null;
 
@@ -87,7 +87,7 @@ export async function upsertTransaction(
   return mapTransaction(data as TransactionRow);
 }
 
-export async function deleteTransaction(id: string) {
+export async function deleteTransaction(id: string): Promise<void> {
   const supabase = requireSupabase();
   const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) throw error;
@@ -100,7 +100,7 @@ export type MonthlyCashflowPoint = {
   balance: number;
 };
 
-export async function listMonthlyCashflow(lastNMonths: number) {
+export async function listMonthlyCashflow(lastNMonths: number): Promise<MonthlyCashflowPoint[]> {
   const supabase = requireSupabase();
   const now = new Date();
   const start = startOfMonth(subMonths(now, lastNMonths - 1));

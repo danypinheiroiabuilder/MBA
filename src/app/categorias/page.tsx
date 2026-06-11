@@ -11,30 +11,12 @@ import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { PageHeader } from "@/components/PageHeader";
+import { FieldError } from "@/components/ui/FieldError";
 import { useAuthStore } from "@/stores/auth";
 import { useDataStore } from "@/stores/data";
 
-function Section({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <div>
-        <div className="text-sm font-medium text-muted">{subtitle}</div>
-        <div className="text-base font-semibold tracking-tight text-text">
-          {title}
-        </div>
-      </div>
-      {children}
-    </div>
-  );
-}
+type DeleteError = { categoryId: string; message: string } | null;
 
 export default function CategoriasPage() {
   const { user } = useAuthStore();
@@ -45,6 +27,8 @@ export default function CategoriasPage() {
     removeCategory: removeCategoryAction,
   } = useDataStore();
   const [open, setOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<DeleteError>(null);
 
   useEffect(() => {
     void refreshCategories();
@@ -71,13 +55,15 @@ export default function CategoriasPage() {
 
   async function handleRemoveCategory(id: string) {
     try {
+      setDeleteError(null);
       await removeCategoryAction(id);
+      setDeleteConfirm(null);
     } catch (e: unknown) {
-      alert(
+      const message =
         e instanceof Error
           ? e.message
-          : "Não foi possível excluir. Se houver lançamentos usando esta categoria, remova/edite os lançamentos primeiro.",
-      );
+          : "Não foi possível excluir. Se houver lançamentos usando esta categoria, remova/edite os lançamentos primeiro.";
+      setDeleteError({ categoryId: id, message });
     }
   }
 
@@ -87,27 +73,30 @@ export default function CategoriasPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="text-sm font-medium text-muted">Cadastros</div>
-          <div className="text-2xl font-semibold tracking-tight text-text">
-            Categorias
-          </div>
-        </div>
-        <Button variant="primary" onClick={() => setOpen(true)}>
-          Nova categoria
-        </Button>
-      </div>
+      <PageHeader
+        label="Cadastros"
+        title="Categorias"
+        actions={
+          <Button variant="primary" onClick={() => setOpen(true)}>
+            Nova categoria
+          </Button>
+        }
+      />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {(["income", "expense"] as const).map((t) => {
           const list = t === "income" ? byType.income : byType.expense;
           return (
             <Card key={t}>
-              <Section
-                title={typeLabel(t)}
-                subtitle={t === "income" ? "Entrada" : "Saída"}
-              >
+              <div className="space-y-2">
+                <div>
+                  <div className="text-sm font-medium text-muted">
+                    {t === "income" ? "Entrada" : "Saída"}
+                  </div>
+                  <div className="text-base font-semibold tracking-tight text-text">
+                    {typeLabel(t)}
+                  </div>
+                </div>
                 <div className="mt-3 space-y-2">
                   {list.length === 0 ? (
                     <div className="rounded-2xl border border-border bg-card/30 p-4 text-sm text-muted">
@@ -131,7 +120,10 @@ export default function CategoriasPage() {
                         <Button
                           variant="ghost"
                           className="px-3"
-                          onClick={() => void handleRemoveCategory(c.id)}
+                          onClick={() => {
+                            setDeleteConfirm(c.id);
+                            setDeleteError(null);
+                          }}
                         >
                           Excluir
                         </Button>
@@ -139,11 +131,53 @@ export default function CategoriasPage() {
                     ))
                   )}
                 </div>
-              </Section>
+              </div>
             </Card>
           );
         })}
       </div>
+
+      <Dialog
+        open={!!deleteConfirm}
+        title="Excluir categoria"
+        onClose={() => {
+          setDeleteConfirm(null);
+          setDeleteError(null);
+        }}
+        footer={
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => {
+                setDeleteConfirm(null);
+                setDeleteError(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              type="button"
+              className="bg-expense/80 hover:bg-expense text-text"
+              onClick={() => deleteConfirm && void handleRemoveCategory(deleteConfirm)}
+            >
+              Excluir
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          {deleteError && deleteError.categoryId === deleteConfirm && (
+            <div className="rounded-2xl border border-expense/30 bg-expense/10 p-3 text-sm text-expense">
+              {deleteError.message}
+            </div>
+          )}
+          <p className="text-sm text-muted">
+            Tem certeza que deseja excluir esta categoria? Esta ação não pode ser desfeita.
+          </p>
+        </div>
+      </Dialog>
 
       <Dialog
         open={open}
@@ -168,11 +202,7 @@ export default function CategoriasPage() {
           <div className="space-y-1">
             <div className="text-xs font-medium text-muted">Nome</div>
             <Input placeholder="Ex.: Alimentação" {...form.register("name")} />
-            {form.formState.errors.name && (
-              <div className="text-xs text-expense">
-                {form.formState.errors.name.message}
-              </div>
-            )}
+            <FieldError message={form.formState.errors.name?.message} />
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -182,11 +212,7 @@ export default function CategoriasPage() {
                 <option value="income">Receita</option>
                 <option value="expense">Despesa</option>
               </Select>
-              {form.formState.errors.type && (
-                <div className="text-xs text-expense">
-                  {form.formState.errors.type.message}
-                </div>
-              )}
+              <FieldError message={form.formState.errors.type?.message} />
             </div>
 
             <div className="space-y-1">
@@ -204,11 +230,7 @@ export default function CategoriasPage() {
                   onChange={(e) => form.setValue("color", e.target.value, { shouldValidate: true })}
                 />
               </div>
-              {form.formState.errors.color && (
-                <div className="text-xs text-expense">
-                  {form.formState.errors.color.message}
-                </div>
-              )}
+              <FieldError message={form.formState.errors.color?.message} />
             </div>
           </div>
         </form>

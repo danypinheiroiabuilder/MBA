@@ -20,7 +20,7 @@ function mapCategory(row: CategoryRow): Category {
   };
 }
 
-export async function listCategories() {
+export async function listCategories(): Promise<Category[]> {
   const supabase = requireSupabase();
   const { data, error } = await supabase
     .from("categories")
@@ -30,7 +30,7 @@ export async function listCategories() {
   return (data ?? []).map(mapCategory);
 }
 
-export async function createCategory(input: CategoryInput, userId: string) {
+export async function createCategory(input: CategoryInput, userId: string): Promise<Category> {
   const supabase = requireSupabase();
   const { data, error } = await supabase
     .from("categories")
@@ -46,7 +46,7 @@ export async function createCategory(input: CategoryInput, userId: string) {
   return mapCategory(data as CategoryRow);
 }
 
-export async function deleteCategory(id: string) {
+export async function deleteCategory(id: string): Promise<void> {
   const supabase = requireSupabase();
   const { error } = await supabase.from("categories").delete().eq("id", id);
   if (error) throw error;

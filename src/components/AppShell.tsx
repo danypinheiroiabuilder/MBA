@@ -125,7 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="min-w-0 flex-1">
               <header className="mb-4 flex items-center justify-between sm:hidden">
                 <div className="text-base font-semibold tracking-tight text-text">
-                  Fluxo de Caixa
+                  {nav.find((item) => isActive(pathname, item.href))?.label ?? "Fluxo de Caixa"}
                 </div>
               </header>
 

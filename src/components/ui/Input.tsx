@@ -1,13 +1,11 @@
 "use client";
 
-import type { InputHTMLAttributes } from "react";
+import { forwardRef, type InputHTMLAttributes } from "react";
 
-export function Input({
-  className = "",
-  ...props
-}: InputHTMLAttributes<HTMLInputElement>) {
-  return (
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
+  ({ className = "", ...props }, ref) => (
     <input
+      ref={ref}
       {...props}
       className={[
         "h-10 w-full rounded-2xl border border-border bg-card/40 px-3 text-sm text-text placeholder:text-muted",
@@ -15,6 +13,7 @@ export function Input({
         className,
       ].join(" ")}
     />
-  );
-}
+  ),
+);
+Input.displayName = "Input";
 

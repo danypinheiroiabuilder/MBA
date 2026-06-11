@@ -4,17 +4,21 @@ import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
-import { motion } from "framer-motion";
 
 import type { Transaction } from "@/lib/types";
 import { transactionSchema, type TransactionInput } from "@/lib/types";
 import { clampMonthKey, monthLabelFromKey, shiftMonthKey } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
+import { buildCategoryMap, calculateTotals } from "@/lib/helpers";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { PageHeader } from "@/components/PageHeader";
+import { MonthNavigator } from "@/components/MonthNavigator";
+import { TransactionRow } from "@/components/TransactionRow";
+import { FieldError } from "@/components/ui/FieldError";
 import { useAuthStore } from "@/stores/auth";
 import { useDataStore } from "@/stores/data";
 
@@ -25,6 +29,7 @@ export default function TransacoesPage() {
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const {
     categories: allCategories,
@@ -44,9 +49,12 @@ export default function TransacoesPage() {
   }, [refreshTransactions, safeMonthKey]);
 
   const categoryById = useMemo(() => {
-    const map = new Map<string, { name: string; color: string; type: string }>();
-    for (const c of allCategories) map.set(c.id, { name: c.name, color: c.color, type: c.type });
-    return map;
+    const map = buildCategoryMap(allCategories);
+    const mapWithType = new Map<string, { name: string; color: string; type: string }>();
+    for (const c of allCategories) {
+      mapWithType.set(c.id, { name: c.name, color: c.color, type: c.type });
+    }
+    return mapWithType;
   }, [allCategories]);
 
   const form = useForm<TransactionInput>({
@@ -100,16 +108,6 @@ export default function TransacoesPage() {
     setEditing(null);
   }
 
-  async function removeTx(id: string) {
-    await removeTransaction(id);
-  }
-
-  const totals = useMemo(() => {
-    const income = tx.filter((t) => t.type === "income").reduce((a, b) => a + b.amount, 0);
-    const expense = tx.filter((t) => t.type === "expense").reduce((a, b) => a + b.amount, 0);
-    return { income, expense, balance: income - expense };
-  }, [tx]);
-
   const [filterCategoryId, setFilterCategoryId] = useState("");
   const [filterTag, setFilterTag] = useState("");
 
@@ -125,33 +123,30 @@ export default function TransacoesPage() {
     });
   }, [tx, filterCategoryId, filterTag]);
 
+  const totals = useMemo(() => calculateTotals(filteredTx), [filteredTx]);
+
+  async function removeTx(id: string) {
+    await removeTransaction(id);
+    setDeleteConfirm(null);
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="text-sm font-medium text-muted">Cadastros</div>
-          <div className="text-2xl font-semibold tracking-tight text-text">
-            Receitas &amp; Despesas
+      <PageHeader
+        label="Cadastros"
+        title="Receitas &amp; Despesas"
+        subtitle={monthLabelFromKey(safeMonthKey)}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <MonthNavigator monthKey={safeMonthKey} onMonthChange={setMonthKey} />
+            <Button variant="primary" onClick={openNew}>
+              Novo lançamento
+            </Button>
           </div>
-          <div className="mt-1 text-sm text-muted">{monthLabelFromKey(safeMonthKey)}</div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" onClick={() => setMonthKey(shiftMonthKey(safeMonthKey, -1))}>
-            Mês anterior
-          </Button>
-          <Button variant="ghost" onClick={() => setMonthKey(format(new Date(), "yyyy-MM"))}>
-            Hoje
-          </Button>
-          <Button variant="ghost" onClick={() => setMonthKey(shiftMonthKey(safeMonthKey, 1))}>
-            Próximo mês
-          </Button>
-          <Button variant="primary" onClick={openNew}>
-            Novo lançamento
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <div className="text-sm font-medium text-muted">Receitas</div>
           <div className="mt-1 text-xl font-semibold text-income">{formatBRL(totals.income)}</div>
@@ -208,53 +203,15 @@ export default function TransacoesPage() {
             filteredTx
               .slice()
               .sort((a, b) => (a.date < b.date ? 1 : -1))
-              .map((t) => {
-                const c = categoryById.get(t.categoryId);
-                return (
-                  <motion.div
-                    key={t.id}
-                    layout
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card/30 px-3 py-2"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.16, ease: "easeOut" }}
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ background: c?.color ?? "rgba(255,255,255,0.25)" }}
-                        />
-                        <div className="truncate text-sm font-medium text-text">
-                          {t.description}
-                        </div>
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted">
-                        {c?.name ?? "Sem categoria"} • {t.date}
-                        {t.tag ? ` • #${t.tag}` : ""}
-                      </div>
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-2">
-                      <div
-                        className={[
-                          "text-sm font-semibold",
-                          t.type === "income" ? "text-income" : "text-expense",
-                        ].join(" ")}
-                      >
-                        {t.type === "income" ? "+" : "-"}
-                        {formatBRL(t.amount)}
-                      </div>
-                      <Button variant="ghost" className="px-3" onClick={() => openEdit(t)}>
-                        Editar
-                      </Button>
-                      <Button variant="ghost" className="px-3" onClick={() => void removeTx(t.id)}>
-                        Excluir
-                      </Button>
-                    </div>
-                  </motion.div>
-                );
-              })
+              .map((t) => (
+                <TransactionRow
+                  key={t.id}
+                  transaction={t}
+                  category={categoryById.get(t.categoryId)}
+                  onEdit={openEdit}
+                  onDelete={setDeleteConfirm}
+                />
+              ))
           )}
         </div>
       </Card>
@@ -288,9 +245,7 @@ export default function TransacoesPage() {
           <div className="space-y-1">
             <div className="text-xs font-medium text-muted">Descrição</div>
             <Input placeholder="Ex.: Compra no mercado" {...form.register("description")} />
-            {form.formState.errors.description && (
-              <div className="text-xs text-expense">{form.formState.errors.description.message}</div>
-            )}
+            <FieldError message={form.formState.errors.description?.message} />
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -310,17 +265,13 @@ export default function TransacoesPage() {
                 <option value="income">Receita</option>
                 <option value="expense">Despesa</option>
               </Select>
-              {form.formState.errors.type && (
-                <div className="text-xs text-expense">{form.formState.errors.type.message}</div>
-              )}
+              <FieldError message={form.formState.errors.type?.message} />
             </div>
 
             <div className="space-y-1">
               <div className="text-xs font-medium text-muted">Data</div>
               <Input type="date" {...form.register("date")} />
-              {form.formState.errors.date && (
-                <div className="text-xs text-expense">{form.formState.errors.date.message}</div>
-              )}
+              <FieldError message={form.formState.errors.date?.message} />
             </div>
           </div>
 
@@ -335,9 +286,7 @@ export default function TransacoesPage() {
                   </option>
                 ))}
               </Select>
-              {form.formState.errors.categoryId && (
-                <div className="text-xs text-expense">{form.formState.errors.categoryId.message}</div>
-              )}
+              <FieldError message={form.formState.errors.categoryId?.message} />
               {categoriesForType.length === 0 && (
                 <div className="text-xs text-muted">
                   Não há categorias para este tipo. Cadastre em{" "}
@@ -354,20 +303,43 @@ export default function TransacoesPage() {
                 inputMode="decimal"
                 {...form.register("amount", { valueAsNumber: true })}
               />
-              {form.formState.errors.amount && (
-                <div className="text-xs text-expense">{form.formState.errors.amount.message}</div>
-              )}
+              <FieldError message={form.formState.errors.amount?.message} />
             </div>
           </div>
 
           <div className="space-y-1">
             <div className="text-xs font-medium text-muted">Tag (opcional)</div>
             <Input placeholder="Ex.: mercado" {...form.register("tag")} />
-            {form.formState.errors.tag && (
-              <div className="text-xs text-expense">{form.formState.errors.tag.message}</div>
-            )}
+            <FieldError message={form.formState.errors.tag?.message} />
           </div>
         </form>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteConfirm}
+        title="Excluir lançamento"
+        onClose={() => setDeleteConfirm(null)}
+        footer={
+          <div className="flex gap-2">
+            <Button variant="ghost" type="button" onClick={() => setDeleteConfirm(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              type="button"
+              className="bg-expense/80 hover:bg-expense text-text"
+              onClick={() => deleteConfirm && void removeTx(deleteConfirm)}
+            >
+              Excluir
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-2">
+          <p className="text-sm text-muted">
+            Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.
+          </p>
+        </div>
       </Dialog>
     </div>
   );

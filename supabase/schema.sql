@@ -81,7 +81,8 @@ create policy "transactions_delete_own" on public.transactions
 for delete using (user_id = auth.uid());
 
 -- View: fluxo mensal (12+ meses) por usuário
-create or replace view public.monthly_cashflow as
+create or replace view public.monthly_cashflow
+with (security_invoker = true) as
 select
   user_id,
   date_trunc('month', date)::date as month,
@@ -89,7 +90,12 @@ select
   sum(case when type = 'expense' then amount else 0 end) as expense,
   sum(case when type = 'income' then amount else -amount end) as balance
 from public.transactions
+where user_id = auth.uid()
 group by 1, 2;
 
--- RLS para view: usa policies da tabela base (ok)
+-- Policy para view
+alter view public.monthly_cashflow owner to postgres;
+drop policy if exists "monthly_cashflow_select_own" on public.monthly_cashflow;
+create policy "monthly_cashflow_select_own" on public.monthly_cashflow
+for select using (user_id = auth.uid());
 

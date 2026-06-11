@@ -15,13 +15,16 @@ import {
 type DataState = {
   categories: Category[];
   categoriesLoading: boolean;
+  categoriesError: string | null;
 
   monthKey: string | null;
   transactions: Transaction[];
   transactionsLoading: boolean;
+  transactionsError: string | null;
 
   cashflow12m: MonthlyCashflowPoint[];
   cashflowLoading: boolean;
+  cashflowError: string | null;
 
   refreshCategories: () => Promise<void>;
   refreshTransactions: (monthKey: string) => Promise<void>;
@@ -41,39 +44,51 @@ type DataState = {
 export const useDataStore = create<DataState>((set, get) => ({
   categories: [],
   categoriesLoading: false,
+  categoriesError: null,
 
   monthKey: null,
   transactions: [],
   transactionsLoading: false,
+  transactionsError: null,
 
   cashflow12m: [],
   cashflowLoading: false,
+  cashflowError: null,
 
   refreshCategories: async () => {
-    set({ categoriesLoading: true });
+    set({ categoriesLoading: true, categoriesError: null });
     try {
       const categories = await listCategories();
-      set({ categories });
+      set({ categories, categoriesError: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load categories";
+      set({ categoriesError: message });
     } finally {
       set({ categoriesLoading: false });
     }
   },
 
   refreshTransactions: async (monthKey: string) => {
-    set({ transactionsLoading: true, monthKey });
+    set({ transactionsLoading: true, monthKey, transactionsError: null });
     try {
       const transactions = await listTransactionsByMonth(monthKey);
-      set({ transactions });
+      set({ transactions, transactionsError: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load transactions";
+      set({ transactionsError: message });
     } finally {
       set({ transactionsLoading: false });
     }
   },
 
   refreshCashflow12m: async () => {
-    set({ cashflowLoading: true });
+    set({ cashflowLoading: true, cashflowError: null });
     try {
       const cashflow12m = await listMonthlyCashflow(12);
-      set({ cashflow12m });
+      set({ cashflow12m, cashflowError: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load cashflow";
+      set({ cashflowError: message });
     } finally {
       set({ cashflowLoading: false });
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import {
@@ -11,22 +12,36 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
 } from "recharts";
-import { motion } from "framer-motion";
+import { pt } from "date-fns/locale";
 
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
+import { PageHeader } from "@/components/PageHeader";
+import { MonthNavigator } from "@/components/MonthNavigator";
+import { TransactionRow } from "@/components/TransactionRow";
 import { clampMonthKey, monthLabelFromKey, shiftMonthKey } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
+import { buildCategoryMap, calculateTotals, sumBy } from "@/lib/helpers";
 import { useAuthStore } from "@/stores/auth";
 import { useDataStore } from "@/stores/data";
 
-function sumBy<T>(items: T[], pick: (t: T) => number) {
-  return items.reduce((acc, t) => acc + pick(t), 0);
+function TrendBadge({ value }: { value: number }) {
+  if (value === 0) return <span className="text-xs text-muted">—</span>;
+  const isPositive = value > 0;
+  const symbol = isPositive ? "↑" : "↓";
+  const color = isPositive ? "text-income" : "text-expense";
+  return (
+    <span className={`text-xs font-medium ${color}`}>
+      {symbol} {formatBRL(Math.abs(value))}
+    </span>
+  );
 }
 
 export function DashboardPage() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const [monthKey, setMonthKey] = useState(() => format(new Date(), "yyyy-MM"));
   const [mounted, setMounted] = useState(false);
@@ -53,26 +68,7 @@ export function DashboardPage() {
     void refreshCashflow12m();
   }, [user, refreshCategories, refreshTransactions, refreshCashflow12m, safeMonthKey]);
 
-  const categoryById = useMemo(() => {
-    const map = new Map<string, { name: string; color: string }>();
-    for (const c of categories) map.set(c.id, { name: c.name, color: c.color });
-    return map;
-  }, [categories]);
-
-  const monthTotals = useMemo(() => {
-    const incomes = monthTx.filter((t) => t.type === "income");
-    const expenses = monthTx.filter((t) => t.type === "expense");
-    const totalIncome = sumBy(incomes, (t) => t.amount);
-    const totalExpense = sumBy(expenses, (t) => t.amount);
-    return {
-      totalIncome,
-      totalExpense,
-      balance: totalIncome - totalExpense,
-      latest: [...monthTx]
-        .sort((a, b) => (a.date < b.date ? 1 : -1))
-        .slice(0, 8),
-    };
-  }, [monthTx]);
+  const categoryById = useMemo(() => buildCategoryMap(categories), [categories]);
 
   const chartData = useMemo(() => {
     const months = Array.from({ length: 12 }, (_, i) =>
@@ -82,8 +78,12 @@ export function DashboardPage() {
 
     return months.map((m) => {
       const p = map.get(m);
+      const [year, monthNum] = m.split("-");
+      const monthDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
+      const monthLabel = format(monthDate, "MMM/yyyy", { locale: pt }).toLowerCase();
+
       return {
-        month: m.slice(5),
+        month: monthLabel,
         monthKey: m,
         income: p?.income ?? 0,
         expense: p?.expense ?? 0,
@@ -92,75 +92,86 @@ export function DashboardPage() {
     });
   }, [cashflow12m, safeMonthKey]);
 
+  const monthTotals = useMemo(() => {
+    const incomes = monthTx.filter((t) => t.type === "income");
+    const expenses = monthTx.filter((t) => t.type === "expense");
+    const totalIncome = sumBy(incomes, (t) => t.amount);
+    const totalExpense = sumBy(expenses, (t) => t.amount);
+    const balance = totalIncome - totalExpense;
+
+    const prevMonthKey = shiftMonthKey(safeMonthKey, -1);
+    const prevMonthData = chartData.find((d) => d.monthKey === prevMonthKey);
+    const prevIncome = prevMonthData?.income ?? 0;
+    const prevExpense = prevMonthData?.expense ?? 0;
+    const prevBalance = prevMonthData?.balance ?? 0;
+
+    return {
+      totalIncome,
+      totalExpense,
+      balance,
+      incomeChange: totalIncome - prevIncome,
+      expenseChange: totalExpense - prevExpense,
+      balanceChange: balance - prevBalance,
+      latest: [...monthTx]
+        .sort((a, b) => (a.date < b.date ? 1 : -1))
+        .slice(0, 8),
+    };
+  }, [monthTx, chartData, safeMonthKey]);
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="text-sm font-medium text-muted">Dashboard</div>
-          <div className="text-2xl font-semibold tracking-tight text-text">
-            {monthLabelFromKey(safeMonthKey)}
-          </div>
-        </div>
+      <PageHeader
+        label="Dashboard"
+        title={monthLabelFromKey(safeMonthKey)}
+        actions={<MonthNavigator monthKey={safeMonthKey} onMonthChange={setMonthKey} />}
+      />
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            onClick={() => setMonthKey(shiftMonthKey(safeMonthKey, -1))}
-          >
-            Mês anterior
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => setMonthKey(format(new Date(), "yyyy-MM"))}
-          >
-            Hoje
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => setMonthKey(shiftMonthKey(safeMonthKey, 1))}
-          >
-            Próximo mês
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <div className="flex items-start justify-between">
-            <div>
+            <div className="flex-1">
               <div className="text-sm font-medium text-muted">Receitas</div>
               <div className="mt-1 text-2xl font-semibold tracking-tight text-text">
                 <AnimatedNumber value={monthTotals.totalIncome} />
               </div>
+              <div className="mt-2">
+                <TrendBadge value={monthTotals.incomeChange} />
+              </div>
             </div>
-            <div className="h-10 w-10 rounded-2xl bg-income/15 ring-1 ring-income/25" />
+            <div className="h-10 w-10 shrink-0 rounded-2xl bg-income/15 ring-1 ring-income/25" />
           </div>
         </Card>
 
         <Card>
           <div className="flex items-start justify-between">
-            <div>
+            <div className="flex-1">
               <div className="text-sm font-medium text-muted">Despesas</div>
               <div className="mt-1 text-2xl font-semibold tracking-tight text-text">
                 <AnimatedNumber value={monthTotals.totalExpense} />
               </div>
+              <div className="mt-2">
+                <TrendBadge value={-monthTotals.expenseChange} />
+              </div>
             </div>
-            <div className="h-10 w-10 rounded-2xl bg-expense/15 ring-1 ring-expense/25" />
+            <div className="h-10 w-10 shrink-0 rounded-2xl bg-expense/15 ring-1 ring-expense/25" />
           </div>
         </Card>
 
         <Card>
           <div className="flex items-start justify-between">
-            <div>
+            <div className="flex-1">
               <div className="text-sm font-medium text-muted">Saldo</div>
               <div className="mt-1 text-2xl font-semibold tracking-tight text-text">
                 <AnimatedNumber value={monthTotals.balance} />
               </div>
-              <div className="mt-2 text-xs text-muted">
-                {monthTotals.balance >= 0 ? "Positivo" : "Negativo"}
+              <div className="mt-2 space-y-1">
+                <div className="text-xs text-muted">
+                  {monthTotals.balance > 0 ? "Positivo" : monthTotals.balance < 0 ? "Negativo" : "Neutro"}
+                </div>
+                <TrendBadge value={monthTotals.balanceChange} />
               </div>
             </div>
-            <div className="h-10 w-10 rounded-2xl bg-primary/15 ring-1 ring-primary/25" />
+            <div className="h-10 w-10 shrink-0 rounded-2xl bg-primary/15 ring-1 ring-primary/25" />
           </div>
         </Card>
       </div>
@@ -175,16 +186,20 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="h-[340px] px-2 pb-4 pt-4 sm:px-6">
+        <div className="h-[380px] px-2 pb-4 pt-4 sm:px-6">
           {mounted ? (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ left: 8, right: 8 }}>
+              <ComposedChart data={chartData} margin={{ left: 8, right: 8, top: 20, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
                 <XAxis
                   dataKey="month"
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "rgba(233,238,255,0.62)", fontSize: 12 }}
+                  height={48}
+                  tick={{ fill: "rgba(233,238,255,0.62)", fontSize: 11 }}
+                  angle={-35}
+                  textAnchor="end"
+                  dy={4}
                 />
                 <YAxis
                   tickLine={false}
@@ -204,6 +219,7 @@ export function DashboardPage() {
                     border: "1px solid rgba(255,255,255,0.10)",
                     borderRadius: 16,
                     color: "rgba(233,238,255,0.92)",
+                    padding: "8px 12px",
                   }}
                   formatter={(value: unknown, name: unknown) => {
                     const n = String(name);
@@ -212,7 +228,9 @@ export function DashboardPage() {
                         ? "Receitas"
                         : n === "expense"
                           ? "Despesas"
-                          : "Saldo";
+                          : n === "balance"
+                            ? "Saldo"
+                            : String(name);
                     return [formatBRL(Number(value) || 0), label];
                   }}
                   labelFormatter={(
@@ -221,6 +239,26 @@ export function DashboardPage() {
                   ) => {
                     const key = payload?.[0]?.payload?.monthKey;
                     return key ? monthLabelFromKey(key) : String(label);
+                  }}
+                  cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                />
+
+                <Legend
+                  wrapperStyle={{
+                    paddingTop: "12px",
+                    paddingBottom: "0",
+                    color: "rgba(233,238,255,0.62)",
+                    fontSize: 12,
+                  }}
+                  formatter={(value: unknown) => {
+                    const v = String(value);
+                    return v === "income"
+                      ? "Receitas"
+                      : v === "expense"
+                        ? "Despesas"
+                        : v === "balance"
+                          ? "Saldo"
+                          : v;
                   }}
                 />
 
@@ -242,10 +280,12 @@ export function DashboardPage() {
                   type="monotone"
                   dataKey="balance"
                   name="balance"
-                  stroke="rgba(110,123,255,0.95)"
-                  strokeWidth={2.5}
-                  dot={false}
+                  stroke="rgba(110,123,255,1)"
+                  strokeWidth={3}
+                  dot={{ fill: "rgba(110,123,255,1)", r: 3 }}
+                  activeDot={{ r: 5 }}
                   animationDuration={650}
+                  isAnimationActive={true}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -255,7 +295,7 @@ export function DashboardPage() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card>
           <div className="flex items-center justify-between">
             <div>
@@ -275,45 +315,14 @@ export function DashboardPage() {
                 Nenhuma movimentação neste mês ainda.
               </div>
             ) : (
-              monthTotals.latest.map((t) => {
-                const c = categoryById.get(t.categoryId);
-                return (
-                  <motion.div
-                    key={t.id}
-                    layout
-                    className="flex items-center justify-between rounded-2xl border border-border bg-card/30 px-3 py-2"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.16, ease: "easeOut" }}
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ background: c?.color ?? "rgba(255,255,255,0.25)" }}
-                        />
-                        <div className="truncate text-sm font-medium text-text">
-                          {t.description}
-                        </div>
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted">
-                        {c?.name ?? "Sem categoria"} • {t.date}
-                        {t.tag ? ` • #${t.tag}` : ""}
-                      </div>
-                    </div>
-
-                    <div
-                      className={[
-                        "shrink-0 text-sm font-semibold",
-                        t.type === "income" ? "text-income" : "text-expense",
-                      ].join(" ")}
-                    >
-                      {t.type === "income" ? "+" : "-"}
-                      {formatBRL(t.amount)}
-                    </div>
-                  </motion.div>
-                );
-              })
+              monthTotals.latest.map((t) => (
+                <TransactionRow
+                  key={t.id}
+                  transaction={t}
+                  category={categoryById.get(t.categoryId)}
+                  showActions={false}
+                />
+              ))
             )}
           </div>
         </Card>
@@ -330,10 +339,10 @@ export function DashboardPage() {
             leitura.
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button variant="primary" onClick={() => (window.location.href = "/transacoes")}>
+            <Button variant="primary" onClick={() => router.push("/transacoes")}>
               Lançar agora
             </Button>
-            <Button variant="ghost" onClick={() => (window.location.href = "/categorias")}>
+            <Button variant="ghost" onClick={() => router.push("/categorias")}>
               Gerenciar categorias
             </Button>
           </div>
