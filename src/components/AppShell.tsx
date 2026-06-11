@@ -33,6 +33,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (user && isLogin) router.replace("/");
   }, [ready, user, isAuthPage, isLogin, router]);
 
+  // Páginas de autenticação podem ser renderizadas antes de `ready` ser true
+  if (isAuthPage) {
+    if (!ready) {
+      return (
+        <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+          <div className="h-[60vh] w-full animate-pulse rounded-3xl border border-border bg-surface/55" />
+        </div>
+      );
+    }
+    // Se usuário logado tenta acessar login, redireciona
+    if (user && isLogin) {
+      return (
+        <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+          <div className="h-[60vh] w-full animate-pulse rounded-3xl border border-border bg-surface/55" />
+        </div>
+      );
+    }
+    // Mostra página de auth (login/reset)
+    return (
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+        {children}
+      </div>
+    );
+  }
+
+  // Páginas protegidas precisam aguardar `ready` e autenticação
   if (!ready) {
     return (
       <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
@@ -41,7 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user && !isAuthPage) {
+  if (!user) {
     return (
       <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
         <div className="h-[60vh] w-full animate-pulse rounded-3xl border border-border bg-surface/55" />
@@ -49,23 +75,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (user && isLogin) {
-    return (
-      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
-        <div className="h-[60vh] w-full animate-pulse rounded-3xl border border-border bg-surface/55" />
-      </div>
-    );
-  }
-
+  // Aqui só chegam páginas protegidas com usuário logado
   return (
     <div className="min-h-dvh w-full">
-      {isAuthPage ? (
-        <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-          {children}
-        </div>
-      ) : (
-        <>
-          <div className="mx-auto flex w-full max-w-6xl gap-4 px-4 pt-6 pb-24 sm:px-6 sm:py-6">
+      <>
+        <div className="mx-auto flex w-full max-w-6xl gap-4 px-4 pt-6 pb-24 sm:px-6 sm:py-6">
             <aside className="hidden w-64 shrink-0 sm:block">
               <div className="sticky top-6 space-y-4">
                 <div className="rounded-3xl border border-border bg-surface/70 p-4 backdrop-blur">
@@ -175,7 +189,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
         </>
-      )}
     </div>
   );
 }
